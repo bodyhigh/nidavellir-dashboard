@@ -120,7 +120,7 @@
     {
       "category": "Network & Security",
       "name": "LAN Isolation & CSP",
-      "value": "192.168.68.x:3456 (Internal Only)",
+      "value": "192.168.68.64:3456 (Host LAN Only)",
       "status": "healthy",
       "detail": "default-src 'self'; zero outbound network requests allowed"
     },

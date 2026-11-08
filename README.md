@@ -96,8 +96,8 @@ pnpm run dev
 ### 1. Build and Run via Docker Compose
 
 ```bash
-# Optional: Set host LAN IP (defaults to 192.168.68.10)
-export DASHBOARD_BIND_IP="192.168.68.10"
+# Optional: Set host LAN IP (defaults to 192.168.68.64)
+export DASHBOARD_BIND_IP="192.168.68.64"
 
 # Build and start container in detached mode
 docker compose up -d --build
@@ -113,7 +113,7 @@ ss -ltn | grep 3456
 docker ps -f name=nidavellir-dashboard
 
 # Test HTTP response
-curl -I http://192.168.68.10:3456/
+curl -I http://192.168.68.64:3456/
 ```
 
 ### 3. Security Verification
@@ -121,7 +121,7 @@ curl -I http://192.168.68.10:3456/
 Inspect HTTP response headers:
 
 ```bash
-curl -i http://192.168.68.10:3456/ | grep -E "Content-Security-Policy|X-Frame-Options|X-Content-Type-Options"
+curl -i http://192.168.68.64:3456/ | grep -E "Content-Security-Policy|X-Frame-Options|X-Content-Type-Options"
 ```
 
 Expected output:

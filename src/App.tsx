@@ -107,7 +107,7 @@ export default function App() {
                 Target LAN
               </span>
               <span className="text-gray-200 font-mono font-medium">
-                192.168.68.x:3456
+                192.168.68.64:3456
               </span>
             </div>
           </div>
@@ -607,7 +607,7 @@ export default function App() {
           <div className="flex items-center gap-3 font-mono text-[11px]">
             <span>Spec: Candidate v3 (Consensus Signed)</span>
             <span>·</span>
-            <span>Target: 192.168.68.x:3456</span>
+            <span>Target: 192.168.68.64:3456</span>
           </div>
         </div>
       </footer>
