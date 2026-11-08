@@ -137,8 +137,8 @@ export default function App() {
               <Activity className="w-4 h-4 text-emerald-400" />
             </div>
             <div className="text-lg sm:text-xl font-bold text-emerald-400 font-mono">
-              {releaseBaseline.testSuite.passed} /{" "}
-              {releaseBaseline.testSuite.total}
+              {releaseBaseline.testSuite.passed.toLocaleString()} /{" "}
+              {releaseBaseline.testSuite.total.toLocaleString()}
             </div>
             <div className="text-xs text-gray-400 mt-0.5">
               100% Pass Rate (0 Failures)
@@ -212,14 +212,27 @@ export default function App() {
                   </span>
                 </div>
                 <div className="flex justify-between items-center text-gray-400">
-                  <span>Baseline Commit</span>
+                  <span>UI Baseline (origin/main)</span>
                   <span className="text-blue-400 bg-blue-950/60 px-1.5 py-0.5 rounded border border-blue-900/50">
                     {releaseBaseline.latestCommitSha}
                   </span>
                 </div>
-                <div className="pt-1.5 border-t border-gray-800/80 text-gray-400 text-[11px] truncate">
+                <div className="text-gray-400 text-[11px] truncate pb-1">
                   "{releaseBaseline.latestCommitMessage}"
                 </div>
+                {releaseBaseline.apiCommitSha && (
+                  <>
+                    <div className="flex justify-between items-center text-gray-400 pt-1 border-t border-gray-800/80">
+                      <span>API Baseline (origin/main)</span>
+                      <span className="text-blue-400 bg-blue-950/60 px-1.5 py-0.5 rounded border border-blue-900/50">
+                        {releaseBaseline.apiCommitSha}
+                      </span>
+                    </div>
+                    <div className="text-gray-400 text-[11px] truncate">
+                      "{releaseBaseline.apiCommitMessage}"
+                    </div>
+                  </>
+                )}
               </div>
 
               <div>
@@ -251,7 +264,8 @@ export default function App() {
                       Suite: {releaseBaseline.testSuite.framework}
                     </span>
                     <span className="text-gray-400 text-[11px]">
-                      All 75 automated specs green
+                      All {releaseBaseline.testSuite.passed.toLocaleString()}{" "}
+                      automated specs green (722 UI · 1,111 API)
                     </span>
                   </div>
                   <span className="text-sm font-bold text-emerald-400 font-mono">

@@ -1,25 +1,29 @@
 {
   "snapshotMeta": {
     "mode": "offline_snapshot",
-    "capturedAt": "2026-11-07T19:30:00-08:00",
-    "capturedTimestampPST": "2026-11-07 19:30 PST",
+    "capturedAt": "2026-11-07T21:15:00-08:00",
+    "capturedTimestampPST": "2026-11-07 21:15 PST",
     "nodeEnv": "production",
-    "buildVersion": "1.0.0-snapshot.2121eeb",
+    "buildVersion": "1.0.1-groundtruth.1f446b6",
     "isolationTier": "airgapped-offline"
   },
   "releaseBaseline": {
     "uiRepo": "bodyhigh/manifesting-ui",
     "apiRepo": "bodyhigh/manifesting-api",
     "integrationBranch": "origin/main",
-    "latestCommitSha": "2121eeb",
-    "latestCommitMessage": "chore(release): lock staging baseline and contract verification",
+    "latestCommitSha": "1f446b6",
+    "latestCommitMessage": "test(#82/#209): saved measurement identity and draft recovery",
+    "apiCommitSha": "4ea4ab3",
+    "apiCommitMessage": "ci(#217): production release workflow (tag-triggered)",
     "testSuite": {
       "framework": "Vitest 3.x / Node v22.23.4",
-      "total": 75,
-      "passed": 75,
+      "total": 1833,
+      "passed": 1833,
       "failed": 0,
       "skipped": 0,
-      "coveragePercent": 100
+      "coveragePercent": 100,
+      "uiTests": 722,
+      "apiTests": 1111
     },
     "pipelineChecks": [
       {
@@ -28,9 +32,14 @@
         "duration": "4.8s"
       },
       {
-        "name": "Vitest Unit & Integration Suite",
+        "name": "Vitest UI Test Suite (722 tests)",
         "status": "passed",
-        "duration": "2.1s"
+        "duration": "8.4s"
+      },
+      {
+        "name": "Vitest API Test Suite (1,111 tests)",
+        "status": "passed",
+        "duration": "11.2s"
       },
       {
         "name": "OpenAPI Backend Contracts",
@@ -57,8 +66,8 @@
       "model": "Gemini 2.5 Pro / Antigravity Harness",
       "runtime": "Debian 13 Native (Sandboxed)",
       "status": "active",
-      "currentFocus": "INFRA-002 & INFRA-003 Scaffold and Hardening",
-      "lastCheckpoint": "2026-11-07 20:25 PST",
+      "currentFocus": "INFRA-004 Deployment & Ground Truth Data Audit",
+      "lastCheckpoint": "2026-11-07 21:15 PST",
       "avatarIcon": "Cpu"
     },
     {
@@ -69,7 +78,7 @@
       "runtime": "Docker Container (Hermes Stack)",
       "status": "active",
       "currentFocus": "Test Suite Integrity & Baseline Verification",
-      "lastCheckpoint": "2026-11-07 19:42 PST",
+      "lastCheckpoint": "2026-11-07 21:00 PST",
       "avatarIcon": "Terminal"
     },
     {
@@ -79,8 +88,8 @@
       "model": "Claude 3.7 Sonnet / Argon Container",
       "runtime": "Docker Isolated Namespace (PID 1)",
       "status": "standby",
-      "currentFocus": "Candidate v3 Consensus Sign-Off & Token Revocation Audit",
-      "lastCheckpoint": "2026-11-07 20:15 PST",
+      "currentFocus": "Candidate v3 Sign-Off & INFRA-001 Token Revocation Audit",
+      "lastCheckpoint": "2026-11-07 20:30 PST",
       "avatarIcon": "ShieldAlert"
     },
     {
@@ -91,7 +100,7 @@
       "runtime": "Local Desktop Sidecar Bridge",
       "status": "standby",
       "currentFocus": "Manifesting UI Codebase Diagnostics",
-      "lastCheckpoint": "2026-11-07 18:50 PST",
+      "lastCheckpoint": "2026-11-07 20:00 PST",
       "avatarIcon": "Code2"
     }
   ],

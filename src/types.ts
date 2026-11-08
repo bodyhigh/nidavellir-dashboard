@@ -4,6 +4,8 @@ export interface ReleaseBaseline {
   integrationBranch: string;
   latestCommitSha: string;
   latestCommitMessage: string;
+  apiCommitSha?: string;
+  apiCommitMessage?: string;
   testSuite: {
     framework: string;
     total: number;
