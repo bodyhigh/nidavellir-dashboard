@@ -1,0 +1,142 @@
+{
+  "snapshotMeta": {
+    "mode": "offline_snapshot",
+    "capturedAt": "2026-11-07T19:30:00-08:00",
+    "capturedTimestampPST": "2026-11-07 19:30 PST",
+    "nodeEnv": "production",
+    "buildVersion": "1.0.0-snapshot.2121eeb",
+    "isolationTier": "airgapped-offline"
+  },
+  "releaseBaseline": {
+    "uiRepo": "bodyhigh/manifesting-ui",
+    "apiRepo": "bodyhigh/manifesting-api",
+    "integrationBranch": "origin/main",
+    "latestCommitSha": "2121eeb",
+    "latestCommitMessage": "chore(release): lock staging baseline and contract verification",
+    "testSuite": {
+      "framework": "Vitest 3.x / Node v22.23.4",
+      "total": 75,
+      "passed": 75,
+      "failed": 0,
+      "skipped": 0,
+      "coveragePercent": 100
+    },
+    "pipelineChecks": [
+      {
+        "name": "TypeScript Typecheck (tsc --noEmit)",
+        "status": "passed",
+        "duration": "4.8s"
+      },
+      {
+        "name": "Vitest Unit & Integration Suite",
+        "status": "passed",
+        "duration": "2.1s"
+      },
+      {
+        "name": "OpenAPI Backend Contracts",
+        "status": "passed",
+        "duration": "1.3s"
+      },
+      {
+        "name": "Deployment Environment Pre-Flight",
+        "status": "passed",
+        "duration": "0.9s"
+      },
+      {
+        "name": "Staging Bindings Validation",
+        "status": "passed",
+        "duration": "1.7s"
+      }
+    ]
+  },
+  "agents": [
+    {
+      "id": "antigravity",
+      "callsign": "Antigravity",
+      "role": "Lead Architect & Workspace Orchestrator",
+      "model": "Gemini 2.5 Pro / Antigravity Harness",
+      "runtime": "Debian 13 Native (Sandboxed)",
+      "status": "active",
+      "currentFocus": "INFRA-002 & INFRA-003 Scaffold and Hardening",
+      "lastCheckpoint": "2026-11-07 20:25 PST",
+      "avatarIcon": "Cpu"
+    },
+    {
+      "id": "cereal-killer",
+      "callsign": "Cereal Killer",
+      "role": "Release Engineer & Test Harness Pilot",
+      "model": "GPT-4.5 Preview / Codex Harness",
+      "runtime": "Docker Container (Hermes Stack)",
+      "status": "active",
+      "currentFocus": "Test Suite Integrity & Baseline Verification",
+      "lastCheckpoint": "2026-11-07 19:42 PST",
+      "avatarIcon": "Terminal"
+    },
+    {
+      "id": "zero-cool",
+      "callsign": "Zero Cool",
+      "role": "Security Red Team & Threat Modeler",
+      "model": "Claude 3.7 Sonnet / Argon Container",
+      "runtime": "Docker Isolated Namespace (PID 1)",
+      "status": "standby",
+      "currentFocus": "Candidate v3 Consensus Sign-Off & Token Revocation Audit",
+      "lastCheckpoint": "2026-11-07 20:15 PST",
+      "avatarIcon": "ShieldAlert"
+    },
+    {
+      "id": "codex",
+      "callsign": "Codex",
+      "role": "Autonomous Code Generator & Bridge Peer",
+      "model": "Codex Desktop Engine",
+      "runtime": "Local Desktop Sidecar Bridge",
+      "status": "standby",
+      "currentFocus": "Manifesting UI Codebase Diagnostics",
+      "lastCheckpoint": "2026-11-07 18:50 PST",
+      "avatarIcon": "Code2"
+    }
+  ],
+  "infrastructure": [
+    {
+      "category": "Host Machine",
+      "name": "Host Operating System",
+      "value": "Debian GNU/Linux 13 (trixie)",
+      "status": "optimal",
+      "detail": "Kernel 6.12.115+deb13.1-amd64, systemd as PID 1"
+    },
+    {
+      "category": "Runtime Toolchain",
+      "name": "Node.js Engine",
+      "value": "v22.23.4 (Pinned Binary)",
+      "status": "optimal",
+      "detail": "pnpm v11.25.0 supply-chain policy locked"
+    },
+    {
+      "category": "Container Supervision",
+      "name": "Docker Engine Supervision",
+      "value": "restart: unless-stopped",
+      "status": "optimal",
+      "detail": "Daemon-level supervision, crash restart recovery"
+    },
+    {
+      "category": "Network & Security",
+      "name": "LAN Isolation & CSP",
+      "value": "192.168.68.x:3456 (Internal Only)",
+      "status": "healthy",
+      "detail": "default-src 'self'; zero outbound network requests allowed"
+    },
+    {
+      "category": "Storage Engine",
+      "name": "Root & Volume Storage",
+      "value": "NVMe Primary Mount",
+      "status": "healthy",
+      "detail": "tmpfs mounts for /tmp, /var/run, /var/cache/nginx"
+    },
+    {
+      "category": "Demo Resilience",
+      "name": "Starlink Disconnect Tolerance",
+      "value": "100% Offline Ready",
+      "status": "optimal",
+      "detail": "Zero CDN or GitHub dependencies during tablet presentation"
+    }
+  ]
+}

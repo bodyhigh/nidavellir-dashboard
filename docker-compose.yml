@@ -1,0 +1,22 @@
+services:
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: nidavellir-dashboard:latest
+    container_name: nidavellir-dashboard
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /var/run
+      - /var/cache/nginx
+    ports:
+      # Bind explicitly to Nidavellir host LAN IP to prevent unintended exposure
+      - "${DASHBOARD_BIND_IP:-192.168.68.10}:3456:80"
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:80/ || exit 1"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
