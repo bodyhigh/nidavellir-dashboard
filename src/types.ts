@@ -1,3 +1,21 @@
+export type SnapshotMode = "live" | "cached" | "offline_snapshot";
+
+export interface SourceFreshness {
+  githubReachable: boolean;
+  hostProbesActive: boolean;
+  cacheAgeSeconds: number;
+  lastError?: string | null;
+}
+
+export interface StoryItem {
+  key: string;
+  title: string;
+  priority: "P0" | "P1" | "P2" | "P3";
+  status: "complete" | "active" | "held" | "backlog";
+  summary: string;
+  issueNumber?: number;
+}
+
 export interface ReleaseBaseline {
   uiRepo: string;
   apiRepo: string;
@@ -13,6 +31,8 @@ export interface ReleaseBaseline {
     failed: number;
     skipped: number;
     coveragePercent: number;
+    uiTests?: number;
+    apiTests?: number;
   };
   pipelineChecks: Array<{
     name: string;
@@ -43,14 +63,16 @@ export interface InfrastructureMetric {
 
 export interface DashboardData {
   snapshotMeta: {
-    mode: "offline_snapshot";
+    mode: SnapshotMode;
     capturedAt: string;
     capturedTimestampPST: string;
     nodeEnv: string;
     buildVersion: string;
     isolationTier: string;
   };
+  sourceStatus?: SourceFreshness;
   releaseBaseline: ReleaseBaseline;
   agents: AgentMember[];
   infrastructure: InfrastructureMetric[];
+  stories?: StoryItem[];
 }

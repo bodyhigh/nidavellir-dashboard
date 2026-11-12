@@ -15,16 +15,32 @@ RUN pnpm install --frozen-lockfile
 # Copy application source
 COPY . .
 
-# Run typecheck and production build
-RUN pnpm run typecheck && pnpm run build
+# Run typecheck, collector tests, and production build
+RUN pnpm run typecheck && node --test collector/collector.test.mjs && pnpm run build
 
-# Stage 2: Hardened Alpine Nginx static server
-FROM nginx:alpine-slim
+# Stage 2: Hardened Node.js Live Telemetry Collector Sidecar (INFRA-008 / INFRA-010)
+FROM node:22-alpine AS collector
+
+WORKDIR /app
+ENV NODE_ENV=production
+ENV COLLECTOR_BIND_HOST=0.0.0.0
+ENV COLLECTOR_PORT=3001
+
+COPY --chown=node:node collector ./collector
+COPY --chown=node:node src/data/dashboard-snapshot.json ./src/data/dashboard-snapshot.json
+
+USER node
+EXPOSE 3001
+
+CMD ["node", "collector/server.mjs"]
+
+# Stage 3: Hardened Alpine Nginx static server + /api/ reverse proxy (INFRA-003 / INFRA-009)
+FROM nginx:alpine-slim AS dashboard
 
 # Copy compiled SPA bundle
 COPY --from=builder /app/dist /usr/share/nginx/html
 
-# Copy hardened nginx configuration with strict CSP
+# Copy hardened nginx configuration with strict CSP and /api/ reverse proxy
 COPY nginx.conf /etc/nginx/nginx.conf
 
 # Metadata

@@ -1,6 +1,11 @@
-node_modules/
-dist/
-.git/
+node_modules
+dist
+.git
 .gitignore
 .dockerignore
 *.md
+.env
+.env.*
+*.tmp
+coverage
+.pnpm-store

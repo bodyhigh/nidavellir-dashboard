@@ -1,15 +1,17 @@
 {
   "name": "nidavellir-dashboard",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "collector": "node collector/server.mjs",
     "build": "tsc && vite build",
     "preview": "vite preview",
     "typecheck": "tsc --noEmit",
-    "format": "prettier --write \"src/**/*.{ts,tsx,json,css}\" \"*.{json,js,ts,md,html}\" \"docker-compose.yml\" \"pnpm-workspace.yaml\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx,json,css}\" \"*.{json,js,ts,md,html}\" \"docker-compose.yml\" \"pnpm-workspace.yaml\""
+    "test": "node --test collector/collector.test.mjs",
+    "format": "prettier --write \"src/**/*.{ts,tsx,json,css}\" \"collector/**/*.mjs\" \"*.{json,js,ts,md,html}\" \"docker-compose.yml\" \"pnpm-workspace.yaml\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,json,css}\" \"collector/**/*.mjs\" \"*.{json,js,ts,md,html}\" \"docker-compose.yml\" \"pnpm-workspace.yaml\""
   },
   "dependencies": {
     "lucide-react": "^0.460.0",

@@ -1,19 +1,63 @@
 services:
+  collector:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: collector
+    image: nidavellir-collector:latest
+    container_name: nidavellir-collector
+    restart: unless-stopped
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid,nodev
+    environment:
+      - NODE_ENV=production
+      - COLLECTOR_BIND_HOST=0.0.0.0
+      - COLLECTOR_PORT=3001
+      - COLLECTOR_TTL_MS=30000
+      - GITHUB_TOKEN=${GITHUB_TOKEN:-}
+    volumes:
+      - /tmp/codex-app-tools:/tmp/codex-app-tools:ro
+      - /srv/data/volumes/zero-cool/gateway_state.json:/srv/data/volumes/zero-cool/gateway_state.json:ro
+      - /srv/data/volumes/zero-cool/profiles/cereal_killer/runtime/codex-bridge/host-config.json:/srv/data/volumes/zero-cool/profiles/cereal_killer/runtime/codex-bridge/host-config.json:ro
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3001/api/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
   dashboard:
     build:
       context: .
       dockerfile: Dockerfile
+      target: dashboard
     image: nidavellir-dashboard:latest
     container_name: nidavellir-dashboard
+    depends_on:
+      collector:
+        condition: service_healthy
     restart: unless-stopped
     read_only: true
+    security_opt:
+      - no-new-privileges:true
     tmpfs:
-      - /tmp
-      - /var/run
-      - /var/cache/nginx
+      - /tmp:size=16m,noexec,nosuid,nodev
+      - /var/run:size=4m,noexec,nosuid,nodev
+      - /var/cache/nginx:size=16m,noexec,nosuid,nodev
     ports:
       # Bind explicitly to Nidavellir host LAN IP (verified wlp0s20f3: 192.168.68.64)
-      - "${DASHBOARD_BIND_IP:-192.168.68.64}:3456:80"
+      - "${DASHBOARD_BIND_IP:-192.168.68.64}:${DASHBOARD_PORT:-3456}:80"
     healthcheck:
       test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:80/ || exit 1"]
       interval: 30s

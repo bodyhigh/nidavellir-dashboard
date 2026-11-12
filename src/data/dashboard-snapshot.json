@@ -1,20 +1,26 @@
 {
   "snapshotMeta": {
     "mode": "offline_snapshot",
-    "capturedAt": "2026-11-07T21:15:00-08:00",
-    "capturedTimestampPST": "2026-11-07 21:15 PST",
+    "capturedAt": "2026-11-11T22:55:00-08:00",
+    "capturedTimestampPST": "2026-11-11 22:55 PST",
     "nodeEnv": "production",
-    "buildVersion": "1.0.1-groundtruth.1f446b6",
-    "isolationTier": "airgapped-offline"
+    "buildVersion": "1.1.0-live.3769a1a",
+    "isolationTier": "hybrid-lan-telemetry"
+  },
+  "sourceStatus": {
+    "githubReachable": false,
+    "hostProbesActive": false,
+    "cacheAgeSeconds": 0,
+    "lastError": null
   },
   "releaseBaseline": {
     "uiRepo": "bodyhigh/manifesting-ui",
     "apiRepo": "bodyhigh/manifesting-api",
     "integrationBranch": "origin/main",
-    "latestCommitSha": "1f446b6",
-    "latestCommitMessage": "test(#82/#209): saved measurement identity and draft recovery",
-    "apiCommitSha": "4ea4ab3",
-    "apiCommitMessage": "ci(#217): production release workflow (tag-triggered)",
+    "latestCommitSha": "3769a1a",
+    "latestCommitMessage": "chore(security): clear six moderate advisories via targeted updates and overrides (#251)",
+    "apiCommitSha": "0b99c03",
+    "apiCommitMessage": "ci(release): fix check-run permission, full-history ancestry, robust health parse (#222)",
     "testSuite": {
       "framework": "Vitest 3.x / Node v22.23.4",
       "total": 1833,
@@ -63,44 +69,44 @@
       "id": "antigravity",
       "callsign": "Antigravity",
       "role": "Lead Architect & Workspace Orchestrator",
-      "model": "Gemini 2.5 Pro / Antigravity Harness",
+      "model": "Gemini 4 Argon / Antigravity Harness",
       "runtime": "Debian 13 Native (Sandboxed)",
       "status": "active",
-      "currentFocus": "INFRA-004 Deployment & Ground Truth Data Audit",
-      "lastCheckpoint": "2026-11-07 21:15 PST",
+      "currentFocus": "INFRA-007..011 Live Telemetry & Sidecar Implementation",
+      "lastCheckpoint": "2026-11-11 22:55 PST",
       "avatarIcon": "Cpu"
     },
     {
       "id": "cereal-killer",
       "callsign": "Cereal Killer",
       "role": "Release Engineer & Test Harness Pilot",
-      "model": "GPT-4.5 Preview / Codex Harness",
+      "model": "GPT-5.4 / Codex Bridge Profile",
       "runtime": "Docker Container (Hermes Stack)",
       "status": "active",
-      "currentFocus": "Test Suite Integrity & Baseline Verification",
-      "lastCheckpoint": "2026-11-07 21:00 PST",
+      "currentFocus": "Release Verification & Bridge Coordination",
+      "lastCheckpoint": "2026-11-11 22:50 PST",
       "avatarIcon": "Terminal"
     },
     {
       "id": "zero-cool",
       "callsign": "Zero Cool",
-      "role": "Security Red Team & Threat Modeler",
-      "model": "Claude 3.7 Sonnet / Argon Container",
-      "runtime": "Docker Isolated Namespace (PID 1)",
-      "status": "standby",
-      "currentFocus": "Candidate v3 Sign-Off & INFRA-001 Token Revocation Audit",
-      "lastCheckpoint": "2026-11-07 20:30 PST",
+      "role": "Security Red Team & Release Coordinator",
+      "model": "GPT-6 Astra / Hermes Container",
+      "runtime": "Docker Isolated Namespace (127.0.0.1:9119)",
+      "status": "active",
+      "currentFocus": "Staging Runtime Bindings & Security Assurance",
+      "lastCheckpoint": "2026-11-11 22:45 PST",
       "avatarIcon": "ShieldAlert"
     },
     {
       "id": "codex",
       "callsign": "Codex",
       "role": "Autonomous Code Generator & Bridge Peer",
-      "model": "Codex Desktop Engine",
-      "runtime": "Local Desktop Sidecar Bridge",
-      "status": "standby",
-      "currentFocus": "Manifesting UI Codebase Diagnostics",
-      "lastCheckpoint": "2026-11-07 20:00 PST",
+      "model": "GPT-6.1 Sol / Codex Desktop Engine",
+      "runtime": "Local App-Tools Socket (/tmp/codex-app-tools)",
+      "status": "idle",
+      "currentFocus": "Manifesting Art Release & Domain Workflows",
+      "lastCheckpoint": "2026-11-11 22:40 PST",
       "avatarIcon": "Code2"
     }
   ],
@@ -110,7 +116,7 @@
       "name": "Host Operating System",
       "value": "Debian GNU/Linux 13 (trixie)",
       "status": "optimal",
-      "detail": "Kernel 6.12.115+deb13.1-amd64, systemd as PID 1"
+      "detail": "Kernel 6.12, systemd as PID 1"
     },
     {
       "category": "Runtime Toolchain",
@@ -131,7 +137,7 @@
       "name": "LAN Isolation & CSP",
       "value": "192.168.68.64:3456 (Host LAN Only)",
       "status": "healthy",
-      "detail": "default-src 'self'; zero outbound network requests allowed"
+      "detail": "default-src 'self'; connect-src 'self' (/api/ proxy)"
     },
     {
       "category": "Storage Engine",
@@ -143,9 +149,99 @@
     {
       "category": "Demo Resilience",
       "name": "Starlink Disconnect Tolerance",
-      "value": "100% Offline Ready",
+      "value": "Live Sync + Offline Cache",
       "status": "optimal",
-      "detail": "Zero CDN or GitHub dependencies during tablet presentation"
+      "detail": "Automatic fallback to cached/bundled snapshot on WAN drop"
+    }
+  ],
+  "stories": [
+    {
+      "key": "INFRA-001",
+      "title": "Token Revocation & Cache Purge",
+      "priority": "P0",
+      "status": "held",
+      "summary": "Host disk & git history verified clean; awaiting operator GitHub UI check",
+      "issueNumber": 1
+    },
+    {
+      "key": "INFRA-002",
+      "title": "Offline SPA Scaffold",
+      "priority": "P1",
+      "status": "complete",
+      "summary": "Vite + React + Tailwind SPA with snapshot fallback",
+      "issueNumber": 2
+    },
+    {
+      "key": "INFRA-003",
+      "title": "Nginx Hardening & CSP",
+      "priority": "P1",
+      "status": "complete",
+      "summary": "Read-only nginx:alpine-slim with strict CSP headers",
+      "issueNumber": 3
+    },
+    {
+      "key": "INFRA-004",
+      "title": "Docker Daemon Supervision",
+      "priority": "P1",
+      "status": "complete",
+      "summary": "Compose supervision with collector sidecar and LAN bind",
+      "issueNumber": 4
+    },
+    {
+      "key": "INFRA-005",
+      "title": "Tablet & Outage UAT",
+      "priority": "P2",
+      "status": "active",
+      "summary": "Zero-error fallback when WAN or sidecar is unreachable",
+      "issueNumber": 5
+    },
+    {
+      "key": "INFRA-006",
+      "title": "Server-Side Token & Cache Sync",
+      "priority": "P3",
+      "status": "complete",
+      "summary": "Consolidated into INFRA-008 collector TTL & disk cache",
+      "issueNumber": 6
+    },
+    {
+      "key": "INFRA-007",
+      "title": "Live Data Fetching Epic",
+      "priority": "P1",
+      "status": "complete",
+      "summary": "Replaces static hardcoded snapshot with runtime telemetry",
+      "issueNumber": 7
+    },
+    {
+      "key": "INFRA-008",
+      "title": "Local Collector Sidecar API",
+      "priority": "P1",
+      "status": "complete",
+      "summary": "GET /api/dashboard with TTL cache and atomic fallback",
+      "issueNumber": 8
+    },
+    {
+      "key": "INFRA-009",
+      "title": "Nginx /api/ Reverse Proxy",
+      "priority": "P1",
+      "status": "complete",
+      "summary": "Same-origin /api/ proxy preserving connect-src 'self'",
+      "issueNumber": 9
+    },
+    {
+      "key": "INFRA-010",
+      "title": "Live Agent & Host Health Probes",
+      "priority": "P2",
+      "status": "complete",
+      "summary": "Probes Nidavellir sockets, gateway state, and OS telemetry",
+      "issueNumber": 10
+    },
+    {
+      "key": "INFRA-011",
+      "title": "Frontend Polling & Fallback UI",
+      "priority": "P2",
+      "status": "complete",
+      "summary": "30s live polling, manual refresh, and mode status badges",
+      "issueNumber": 11
     }
   ]
 }
