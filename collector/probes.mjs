@@ -136,7 +136,10 @@ export async function probeGitHubUpstream({
     Accept: "application/vnd.github+json",
     "User-Agent": "nidavellir-dashboard-collector/1.1",
   };
-  if (githubToken && typeof githubToken === "string" && githubToken.trim()) {
+  const hasToken = Boolean(
+    githubToken && typeof githubToken === "string" && githubToken.trim(),
+  );
+  if (hasToken) {
     headers.Authorization = `Bearer ${githubToken.trim()}`;
   }
 
@@ -182,13 +185,17 @@ export async function probeGitHubUpstream({
       ? results[2].value
       : null;
 
-  const errors = results
+  // When no GITHUB_TOKEN is configured, private repos (manifesting-ui/api) return 404
+  // while public dashboardRepo issues succeed and local git checkouts supply commits.
+  const relevantRejections = hasToken ? results : [results[2]];
+  const errors = relevantRejections
     .filter((r) => r.status === "rejected")
     .map((r) => sanitizeError(r.reason));
 
-  const allSucceeded =
-    errors.length === 0 &&
-    Boolean(uiCommit && apiCommit && Array.isArray(rawIssues));
+  const allSucceeded = hasToken
+    ? errors.length === 0 &&
+      Boolean(uiCommit && apiCommit && Array.isArray(rawIssues))
+    : errors.length === 0 && Array.isArray(rawIssues);
 
   return {
     reachable: allSucceeded,
