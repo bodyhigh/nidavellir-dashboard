@@ -615,6 +615,20 @@ export function createCollectorManager({
         ? Math.max(0, Math.floor((nowMs - parsedCaptureMs) / 1000))
         : 0;
 
+    const uiCarriedOver = !uiCommit;
+    const apiCarriedOver = !apiCommit;
+    const anyCarriedOver = uiCarriedOver || apiCarriedOver;
+
+    const releaseBaselineSource = anyCarriedOver
+      ? "carried-over"
+      : ghResult.uiCommit && ghResult.apiCommit
+        ? "live"
+        : "local-git";
+
+    const carriedSince = anyCarriedOver
+      ? priorCache.releaseBaseline?.carriedSince || priorCapturedAt
+      : null;
+
     const releaseBaseline = {
       ...priorCache.releaseBaseline,
       latestCommitSha:
@@ -624,7 +638,21 @@ export function createCollectorManager({
       apiCommitSha: apiCommit?.sha || priorCache.releaseBaseline.apiCommitSha,
       apiCommitMessage:
         apiCommit?.message || priorCache.releaseBaseline.apiCommitMessage,
+      source: releaseBaselineSource,
     };
+    if (carriedSince) {
+      releaseBaseline.carriedSince = carriedSince;
+    } else {
+      delete releaseBaseline.carriedSince;
+    }
+
+    const carriedTargets = [
+      uiCarriedOver ? "uiCommit" : null,
+      apiCarriedOver ? "apiCommit" : null,
+    ].filter(Boolean);
+    const carryOverError = anyCarriedOver
+      ? `releaseBaseline carried over from ${carriedSince} (missing ${carriedTargets.join(", ")})`
+      : null;
 
     const stories = mapGitHubIssuesToStories(
       ghResult.rawIssues,
@@ -650,7 +678,7 @@ export function createCollectorManager({
         githubReachable: Boolean(ghResult.reachable),
         hostProbesActive: Boolean(agentProbeResult.hostProbesActive),
         cacheAgeSeconds,
-        lastError: ghResult.error || null,
+        lastError: ghResult.error || carryOverError || null,
       },
       releaseBaseline,
       agents: agentProbeResult.agents,
