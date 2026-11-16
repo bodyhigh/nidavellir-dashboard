@@ -776,13 +776,18 @@ export function createCollectorManager({
       const priorAge = memoryCache.sourceStatus?.cacheAgeSeconds;
       // Same honesty rule as collectFresh: only recompute a real age, otherwise
       // preserve the already-unknown (null) freshness rather than fabricate 0
-      // from time-since-last-collect.
+      // from time-since-last-collect. An explicit null priorAge means the
+      // provenance was never established (e.g. local-git commit without
+      // committedAt), so a retained capturedAt belongs to an unrelated prior
+      // cache and must not be parsed into a known age.
       const cacheAgeSeconds =
         cachedMode === "live"
           ? 0
-          : Number.isFinite(capturedMs) && capturedMs <= nowMs
-            ? Math.max(0, Math.floor((nowMs - capturedMs) / 1000))
-            : (priorAge ?? null);
+          : priorAge === null
+            ? null
+            : Number.isFinite(capturedMs) && capturedMs <= nowMs
+              ? Math.max(0, Math.floor((nowMs - capturedMs) / 1000))
+              : (priorAge ?? null);
       return {
         ...memoryCache,
         sourceStatus: {

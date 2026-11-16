@@ -472,7 +472,10 @@ test("createCollectorManager reports unknown freshness as null (not 0) for inval
       }),
       probeGitImpl: async () => local,
     });
-    return manager.getDashboardData({ forceRefresh: true });
+    const first = await manager.getDashboardData({ forceRefresh: true });
+    // Ordinary cached polling within TTL must not convert unknown -> known.
+    const cached = await manager.getDashboardData();
+    return { first, cached };
   }
 
   // A) carried-over baseline whose cached capturedAt is unparseable
@@ -481,12 +484,17 @@ test("createCollectorManager reports unknown freshness as null (not 0) for inval
     local: null,
     priorCapturedAt: "not-a-date",
   });
-  assert.equal(invalidCache.snapshotMeta.mode, "cached");
-  assert.equal(invalidCache.releaseBaseline.source, "carried-over");
+  assert.equal(invalidCache.first.snapshotMeta.mode, "cached");
+  assert.equal(invalidCache.first.releaseBaseline.source, "carried-over");
   assert.equal(
-    invalidCache.sourceStatus.cacheAgeSeconds,
+    invalidCache.first.sourceStatus.cacheAgeSeconds,
     null,
     "unparseable capturedAt must report unknown freshness, never 0",
+  );
+  assert.equal(
+    invalidCache.cached.sourceStatus.cacheAgeSeconds,
+    null,
+    "a cached read must not turn unknown freshness into a known age",
   );
 
   // B) local-git fallback whose commit has no committedAt must not borrow the
@@ -496,11 +504,16 @@ test("createCollectorManager reports unknown freshness as null (not 0) for inval
     local: { sha: "local1", message: "no timestamp" },
     priorCapturedAt: nowIso,
   });
-  assert.equal(missingCommitTime.sourceStatus.commitSource, "local-git");
+  assert.equal(missingCommitTime.first.sourceStatus.commitSource, "local-git");
   assert.equal(
-    missingCommitTime.sourceStatus.cacheAgeSeconds,
+    missingCommitTime.first.sourceStatus.cacheAgeSeconds,
     null,
     "local commit without committedAt must not reuse the prior capture time",
+  );
+  assert.equal(
+    missingCommitTime.cached.sourceStatus.cacheAgeSeconds,
+    null,
+    "cached read must preserve unknown local-git age instead of reporting 0",
   );
 
   // C) a future commit timestamp is a clock-skew case, not fresh (0)
@@ -513,11 +526,16 @@ test("createCollectorManager reports unknown freshness as null (not 0) for inval
     },
     priorCapturedAt: nowIso,
   });
-  assert.equal(futureCommit.sourceStatus.commitSource, "local-git");
+  assert.equal(futureCommit.first.sourceStatus.commitSource, "local-git");
   assert.equal(
-    futureCommit.sourceStatus.cacheAgeSeconds,
+    futureCommit.first.sourceStatus.cacheAgeSeconds,
     null,
     "a future timestamp must report unknown freshness, never 0",
+  );
+  assert.equal(
+    futureCommit.cached.sourceStatus.cacheAgeSeconds,
+    null,
+    "cached read must not turn a skewed future timestamp into age 0",
   );
 
   await fs.rm(tmpDir, { recursive: true, force: true });
