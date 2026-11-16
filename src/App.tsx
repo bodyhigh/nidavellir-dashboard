@@ -254,17 +254,21 @@ export default function App() {
             <span className="text-gray-400">—</span>
             <span className="text-gray-300 font-mono">
               Updated: {snapshotMeta.capturedTimestampPST}
-              {sourceStatus && sourceStatus.cacheAgeSeconds > 0
-                ? ` (${formatCacheAge(sourceStatus.cacheAgeSeconds)} ago)`
+              {sourceStatus
+                ? sourceStatus.cacheAgeSeconds == null
+                  ? " (age unknown)"
+                  : sourceStatus.cacheAgeSeconds > 0
+                    ? ` (${formatCacheAge(sourceStatus.cacheAgeSeconds)} ago)`
+                    : ""
                 : ""}
             </span>
           </div>
 
           <div className="flex flex-wrap items-center gap-3 text-xs font-mono">
             {collectorReachable ? (
-              sourceStatus?.githubReachable &&
-              (!sourceStatus.commitSource ||
-                sourceStatus.commitSource === "github") ? (
+              sourceStatus?.githubReachable === true &&
+              sourceStatus.commitSource === "github" &&
+              releaseBaseline.source === "live" ? (
                 <div className="flex items-center gap-1.5 text-emerald-400 bg-emerald-950/60 px-2.5 py-1 rounded border border-emerald-800/40">
                   <Wifi className="w-3.5 h-3.5" />
                   <span>GitHub + Host Live</span>
@@ -274,7 +278,7 @@ export default function App() {
                   <Wifi className="w-3.5 h-3.5" />
                   <span>
                     {sourceStatus?.githubReachable
-                      ? `Issues Live · Commits ${sourceStatus.commitSource ?? "cached"}`
+                      ? `Issues Live · Commits ${sourceStatus.commitSource ?? "unknown"}`
                       : "Host Live · GitHub Cached"}
                   </span>
                 </div>
@@ -444,8 +448,12 @@ export default function App() {
                   title={sourceStatus?.lastError ?? undefined}
                 >
                   {releaseBaseline.source}
-                  {sourceStatus && sourceStatus.cacheAgeSeconds > 0
-                    ? ` · ${formatCacheAge(sourceStatus.cacheAgeSeconds)} old`
+                  {sourceStatus
+                    ? sourceStatus.cacheAgeSeconds == null
+                      ? " · age unknown"
+                      : sourceStatus.cacheAgeSeconds > 0
+                        ? ` · ${formatCacheAge(sourceStatus.cacheAgeSeconds)} old`
+                        : ""
                     : ""}
                 </span>
               ) : (

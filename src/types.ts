@@ -7,7 +7,10 @@ export interface SourceFreshness {
   githubReachable: boolean;
   commitSource?: CommitSource;
   hostProbesActive: boolean;
-  cacheAgeSeconds: number;
+  // Number of seconds since the underlying baseline was captured, or null when
+  // freshness cannot be established (missing/invalid/future timestamp). Null
+  // must never be rendered as 0, which would falsely claim "just captured".
+  cacheAgeSeconds: number | null;
   lastError?: string | null;
 }
 

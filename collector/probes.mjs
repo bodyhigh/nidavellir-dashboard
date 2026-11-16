@@ -493,7 +493,7 @@ export async function probeHostInfrastructure(
         value: githubReachable
           ? "Live Upstream + Cache Ready"
           : mode === "cached"
-            ? `Cached Mode (${cacheAgeSeconds}s old)`
+            ? describeCachedAge(cacheAgeSeconds)
             : "Offline Snapshot Ready",
         status: githubReachable ? "optimal" : "healthy",
         detail: githubReachable
@@ -503,6 +503,12 @@ export async function probeHostInfrastructure(
     }
     return metric;
   });
+}
+
+function describeCachedAge(ageSec) {
+  return ageSec === null || ageSec === undefined
+    ? "Cached Mode (age unknown)"
+    : `Cached Mode (${ageSec}s old)`;
 }
 
 function updateDemoResilienceAge(
@@ -519,7 +525,7 @@ function updateDemoResilienceAge(
       value: githubReachable
         ? "Live Upstream + Cache Ready"
         : mode === "cached"
-          ? `Cached Mode (${ageSec}s old)`
+          ? describeCachedAge(ageSec)
           : "Offline Snapshot Ready",
     };
   });
@@ -650,15 +656,18 @@ export function createCollectorManager({
 
     let capturedAt = priorCapturedAt;
     let capturedTimestampPST = priorCapturedPST;
+    let freshnessKnown = false;
     if (mode === "live") {
       capturedAt = now.toISOString();
       capturedTimestampPST = formatTimestampPST(now);
+      freshnessKnown = true;
     } else if (
       releaseBaselineSource === "local-git" &&
       localFallbackTimestamps.length > 0
     ) {
       capturedAt = localFallbackTimestamps[0];
       capturedTimestampPST = formatTimestampPST(new Date(capturedAt));
+      freshnessKnown = true;
     } else if (
       releaseBaselineSource === "carried-over" &&
       carriedSince &&
@@ -666,15 +675,23 @@ export function createCollectorManager({
     ) {
       capturedAt = carriedSince;
       capturedTimestampPST = formatTimestampPST(new Date(capturedAt));
+      freshnessKnown = true;
     }
 
     const parsedCaptureMs = Date.parse(capturedAt);
+    // Freshness is only known when provenance is positive AND the timestamp is
+    // finite and not in the future. Unknown, invalid or skewed freshness must
+    // report null (rendered as "age unknown"), never 0 - a fabricated claim
+    // that the baseline was just captured. We also never borrow an unrelated
+    // prior-cache capture time as a local-git commit age.
     const cacheAgeSeconds =
       mode === "live"
         ? 0
-        : Number.isFinite(parsedCaptureMs)
+        : freshnessKnown &&
+            Number.isFinite(parsedCaptureMs) &&
+            parsedCaptureMs <= nowMs
           ? Math.max(0, Math.floor((nowMs - parsedCaptureMs) / 1000))
-          : 0;
+          : null;
 
     const releaseBaseline = {
       ...priorCache.releaseBaseline,
@@ -754,10 +771,18 @@ export function createCollectorManager({
       memoryCache && ageSinceCollectMs < minRefreshCooldownMs;
 
     if (memoryCache && ((!forceRefresh && withinTtl) || withinCooldown)) {
+      const cachedMode = memoryCache.snapshotMeta?.mode;
       const capturedMs = Date.parse(memoryCache.snapshotMeta?.capturedAt ?? "");
-      const cacheAgeSeconds = Number.isFinite(capturedMs)
-        ? Math.max(0, Math.floor((nowMs - capturedMs) / 1000))
-        : Math.max(0, Math.floor(ageSinceCollectMs / 1000));
+      const priorAge = memoryCache.sourceStatus?.cacheAgeSeconds;
+      // Same honesty rule as collectFresh: only recompute a real age, otherwise
+      // preserve the already-unknown (null) freshness rather than fabricate 0
+      // from time-since-last-collect.
+      const cacheAgeSeconds =
+        cachedMode === "live"
+          ? 0
+          : Number.isFinite(capturedMs) && capturedMs <= nowMs
+            ? Math.max(0, Math.floor((nowMs - capturedMs) / 1000))
+            : (priorAge ?? null);
       return {
         ...memoryCache,
         sourceStatus: {

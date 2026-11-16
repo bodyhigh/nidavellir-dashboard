@@ -433,3 +433,92 @@ test("createCollectorManager does not claim live/0s freshness when githubReachab
 
   await fs.rm(tmpDir, { recursive: true, force: true });
 });
+
+test("createCollectorManager reports unknown freshness as null (not 0) for invalid, missing, or future fallback timestamps", async () => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "nid-unknown-age-"));
+  const nowIso = new Date().toISOString();
+
+  async function run(name, { gh, local, priorCapturedAt }) {
+    const cacheFile = path.join(tmpDir, `${name}.json`);
+    await fs.writeFile(
+      cacheFile,
+      JSON.stringify({
+        snapshotMeta: {
+          mode: "cached",
+          capturedAt: priorCapturedAt,
+          capturedTimestampPST: "prior",
+        },
+        releaseBaseline: {
+          latestCommitSha: "prior1",
+          apiCommitSha: "prior2",
+        },
+        stories: [],
+      }),
+    );
+    const manager = createCollectorManager({
+      cacheFilePath: cacheFile,
+      ttlMs: 60_000,
+      minRefreshCooldownMs: 0,
+      uiRepoDir: "/fake/ui",
+      apiRepoDir: "/fake/api",
+      probeGitHubImpl: async () => ({
+        reachable: true,
+        partial: true,
+        uiCommit: null,
+        apiCommit: null,
+        rawIssues: [],
+        error: null,
+        ...gh,
+      }),
+      probeGitImpl: async () => local,
+    });
+    return manager.getDashboardData({ forceRefresh: true });
+  }
+
+  // A) carried-over baseline whose cached capturedAt is unparseable
+  const invalidCache = await run("invalid-cache", {
+    gh: {},
+    local: null,
+    priorCapturedAt: "not-a-date",
+  });
+  assert.equal(invalidCache.snapshotMeta.mode, "cached");
+  assert.equal(invalidCache.releaseBaseline.source, "carried-over");
+  assert.equal(
+    invalidCache.sourceStatus.cacheAgeSeconds,
+    null,
+    "unparseable capturedAt must report unknown freshness, never 0",
+  );
+
+  // B) local-git fallback whose commit has no committedAt must not borrow the
+  // unrelated prior-cache capture time as its age
+  const missingCommitTime = await run("missing-commit-time", {
+    gh: {},
+    local: { sha: "local1", message: "no timestamp" },
+    priorCapturedAt: nowIso,
+  });
+  assert.equal(missingCommitTime.sourceStatus.commitSource, "local-git");
+  assert.equal(
+    missingCommitTime.sourceStatus.cacheAgeSeconds,
+    null,
+    "local commit without committedAt must not reuse the prior capture time",
+  );
+
+  // C) a future commit timestamp is a clock-skew case, not fresh (0)
+  const futureCommit = await run("future-commit", {
+    gh: {},
+    local: {
+      sha: "local1",
+      message: "future",
+      committedAt: "2099-01-01T00:00:00Z",
+    },
+    priorCapturedAt: nowIso,
+  });
+  assert.equal(futureCommit.sourceStatus.commitSource, "local-git");
+  assert.equal(
+    futureCommit.sourceStatus.cacheAgeSeconds,
+    null,
+    "a future timestamp must report unknown freshness, never 0",
+  );
+
+  await fs.rm(tmpDir, { recursive: true, force: true });
+});
