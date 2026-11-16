@@ -83,11 +83,11 @@ export function probeTcpPort(host, port, timeoutMs = 600) {
 }
 
 /**
- * Reads latest commit SHA and subject from a local git repository using execFile (no shell).
+ * Reads latest commit SHA, committer ISO timestamp, and subject from a local git repository using execFile (no shell).
  * Strips sensitive env vars and uses --no-optional-locks for read-only safety.
  * @param {string} repoDir
  * @param {number} timeoutMs
- * @returns {Promise<{ sha: string, message: string } | null>}
+ * @returns {Promise<{ sha: string, committedAt: string | null, message: string } | null>}
  */
 export async function probeLocalGitHead(repoDir, timeoutMs = 1500) {
   if (!repoDir) return null;
@@ -96,7 +96,14 @@ export async function probeLocalGitHead(repoDir, timeoutMs = 1500) {
     if (!stat.isDirectory()) return null;
     const { stdout } = await execFileAsync(
       "git",
-      ["--no-optional-locks", "-C", repoDir, "log", "-1", "--format=%h%x09%s"],
+      [
+        "--no-optional-locks",
+        "-C",
+        repoDir,
+        "log",
+        "-1",
+        "--format=%h%x09%cI%x09%s",
+      ],
       {
         timeout: timeoutMs,
         maxBuffer: 64 * 1024,
@@ -109,11 +116,23 @@ export async function probeLocalGitHead(repoDir, timeoutMs = 1500) {
       },
     );
     const line = stdout.trim();
-    const tabIdx = line.indexOf("\t");
-    if (tabIdx <= 0) return null;
+    const parts = line.split("\t");
+    if (parts.length < 2 || !parts[0].trim()) return null;
+    if (parts.length === 2) {
+      return {
+        sha: parts[0].trim(),
+        committedAt: null,
+        message: parts[1].trim(),
+      };
+    }
+    const committedAtRaw = parts[1].trim();
+    const committedAt = Number.isFinite(Date.parse(committedAtRaw))
+      ? committedAtRaw
+      : null;
     return {
-      sha: line.slice(0, tabIdx).trim(),
-      message: line.slice(tabIdx + 1).trim(),
+      sha: parts[0].trim(),
+      committedAt,
+      message: parts.slice(2).join("\t").trim(),
     };
   } catch {
     return null;
@@ -594,8 +613,23 @@ export function createCollectorManager({
     const uiCommit = ghResult.uiCommit || localUiGit;
     const apiCommit = ghResult.apiCommit || localApiGit;
 
-    // Mode is "live" strictly when upstream GitHub is reachable without error
-    const mode = ghResult.reachable ? "live" : "cached";
+    const uiCarriedOver = !uiCommit;
+    const apiCarriedOver = !apiCommit;
+    const anyCarriedOver = uiCarriedOver || apiCarriedOver;
+
+    const commitSource = anyCarriedOver
+      ? "carried-over"
+      : ghResult.uiCommit && ghResult.apiCommit
+        ? "github"
+        : "local-git";
+    const releaseBaselineSource =
+      commitSource === "github" ? "live" : commitSource;
+
+    // Mode is "live" strictly when upstream GitHub is reachable AND both baseline commits came live from GitHub
+    const mode =
+      ghResult.reachable && releaseBaselineSource === "live"
+        ? "live"
+        : "cached";
 
     const priorCapturedAt =
       priorCache.snapshotMeta?.capturedAt || baseline.snapshotMeta.capturedAt;
@@ -603,31 +637,44 @@ export function createCollectorManager({
       priorCache.snapshotMeta?.capturedTimestampPST ||
       baseline.snapshotMeta.capturedTimestampPST;
 
-    const capturedAt = ghResult.reachable ? now.toISOString() : priorCapturedAt;
-    const capturedTimestampPST = ghResult.reachable
-      ? formatTimestampPST(now)
-      : priorCapturedPST;
-
-    const parsedCaptureMs = Date.parse(capturedAt);
-    const cacheAgeSeconds = ghResult.reachable
-      ? 0
-      : Number.isFinite(parsedCaptureMs)
-        ? Math.max(0, Math.floor((nowMs - parsedCaptureMs) / 1000))
-        : 0;
-
-    const uiCarriedOver = !uiCommit;
-    const apiCarriedOver = !apiCommit;
-    const anyCarriedOver = uiCarriedOver || apiCarriedOver;
-
-    const releaseBaselineSource = anyCarriedOver
-      ? "carried-over"
-      : ghResult.uiCommit && ghResult.apiCommit
-        ? "live"
-        : "local-git";
-
     const carriedSince = anyCarriedOver
       ? priorCache.releaseBaseline?.carriedSince || priorCapturedAt
       : null;
+
+    const localFallbackTimestamps = [
+      !ghResult.uiCommit ? localUiGit?.committedAt : null,
+      !ghResult.apiCommit ? localApiGit?.committedAt : null,
+    ]
+      .filter((ts) => typeof ts === "string" && Number.isFinite(Date.parse(ts)))
+      .sort((a, b) => Date.parse(a) - Date.parse(b));
+
+    let capturedAt = priorCapturedAt;
+    let capturedTimestampPST = priorCapturedPST;
+    if (mode === "live") {
+      capturedAt = now.toISOString();
+      capturedTimestampPST = formatTimestampPST(now);
+    } else if (
+      releaseBaselineSource === "local-git" &&
+      localFallbackTimestamps.length > 0
+    ) {
+      capturedAt = localFallbackTimestamps[0];
+      capturedTimestampPST = formatTimestampPST(new Date(capturedAt));
+    } else if (
+      releaseBaselineSource === "carried-over" &&
+      carriedSince &&
+      Number.isFinite(Date.parse(carriedSince))
+    ) {
+      capturedAt = carriedSince;
+      capturedTimestampPST = formatTimestampPST(new Date(capturedAt));
+    }
+
+    const parsedCaptureMs = Date.parse(capturedAt);
+    const cacheAgeSeconds =
+      mode === "live"
+        ? 0
+        : Number.isFinite(parsedCaptureMs)
+          ? Math.max(0, Math.floor((nowMs - parsedCaptureMs) / 1000))
+          : 0;
 
     const releaseBaseline = {
       ...priorCache.releaseBaseline,
@@ -671,11 +718,12 @@ export function createCollectorManager({
         mode,
         capturedAt,
         capturedTimestampPST,
-        buildVersion: `1.1.0-live.${releaseBaseline.latestCommitSha}`,
+        buildVersion: `1.1.0-${mode === "live" ? "live" : releaseBaselineSource}.${releaseBaseline.latestCommitSha}`,
         isolationTier: "hybrid-lan-telemetry",
       },
       sourceStatus: {
         githubReachable: Boolean(ghResult.reachable),
+        commitSource,
         hostProbesActive: Boolean(agentProbeResult.hostProbesActive),
         cacheAgeSeconds,
         lastError: ghResult.error || carryOverError || null,

@@ -1,7 +1,11 @@
 export type SnapshotMode = "live" | "cached" | "offline_snapshot";
 
+export type CommitSource = "github" | "local-git" | "carried-over";
+export type BaselineSource = "live" | "local-git" | "carried-over";
+
 export interface SourceFreshness {
   githubReachable: boolean;
+  commitSource?: CommitSource;
   hostProbesActive: boolean;
   cacheAgeSeconds: number;
   lastError?: string | null;
@@ -24,6 +28,8 @@ export interface ReleaseBaseline {
   latestCommitMessage: string;
   apiCommitSha?: string;
   apiCommitMessage?: string;
+  source?: BaselineSource;
+  carriedSince?: string;
   testSuite: {
     framework: string;
     total: number;

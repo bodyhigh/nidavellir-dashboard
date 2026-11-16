@@ -333,9 +333,10 @@ test("createCollectorServer normalizes paths, enforces URL length limit, sets CS
   }
 });
 
-
 test("createCollectorManager surfaces carried-over releaseBaseline source, carriedSince, and lastError when live commits are unavailable", async () => {
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "nid-carryover-test-"));
+  const tmpDir = await fs.mkdtemp(
+    path.join(os.tmpdir(), "nid-carryover-test-"),
+  );
   const cacheFile = path.join(tmpDir, "cache.json");
 
   const priorCapturedAt = "2026-11-15T05:00:00.000Z";
@@ -384,4 +385,51 @@ test("createCollectorManager surfaces carried-over releaseBaseline source, carri
       data.sourceStatus.lastError.length > 0,
     "expected descriptive lastError when releaseBaseline commits are carried over",
   );
+});
+
+test("createCollectorManager does not claim live/0s freshness when githubReachable=true falls back to stale local-git commits", async () => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "nid-stale-local-"));
+  const cacheFile = path.join(tmpDir, "cache.json");
+  const fiveDaysAgoIso = new Date(Date.now() - 5 * 86_400 * 1000).toISOString();
+
+  const manager = createCollectorManager({
+    cacheFilePath: cacheFile,
+    ttlMs: 60_000,
+    minRefreshCooldownMs: 0,
+    uiRepoDir: "/fake/ui",
+    apiRepoDir: "/fake/api",
+    probeGitHubImpl: async () => ({
+      reachable: true,
+      partial: true,
+      uiCommit: null,
+      apiCommit: null,
+      rawIssues: [],
+      error: null,
+    }),
+    probeGitImpl: async (dir) =>
+      dir.includes("ui")
+        ? {
+            sha: "3769a1a",
+            committedAt: fiveDaysAgoIso,
+            message: "chore(security): stale local ui",
+          }
+        : {
+            sha: "api1234",
+            committedAt: fiveDaysAgoIso,
+            message: "chore: stale local api",
+          },
+  });
+
+  const data = await manager.getDashboardData({ forceRefresh: true });
+  assert.notEqual(data.snapshotMeta.mode, "live");
+  assert.ok(
+    data.sourceStatus.cacheAgeSeconds >= 5 * 86_400 - 10,
+    `expected cacheAgeSeconds >= ~5d, got ${data.sourceStatus.cacheAgeSeconds}`,
+  );
+  assert.equal(data.snapshotMeta.capturedAt, fiveDaysAgoIso);
+  assert.equal(data.sourceStatus.githubReachable, true);
+  assert.equal(data.sourceStatus.commitSource, "local-git");
+  assert.equal(data.releaseBaseline.source, "local-git");
+
+  await fs.rm(tmpDir, { recursive: true, force: true });
 });
