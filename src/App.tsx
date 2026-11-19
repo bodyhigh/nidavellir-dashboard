@@ -29,6 +29,13 @@ const fallbackSnapshot = snapshotDataRaw as DashboardData;
 const POLL_INTERVAL_MS = 30_000;
 const FETCH_TIMEOUT_MS = 4_000;
 
+function formatCacheAge(seconds: number): string {
+  if (seconds < 60) return `${seconds}s`;
+  if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
+  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
+  return `${Math.floor(seconds / 86400)}d`;
+}
+
 const agentIconMap: Record<string, React.ReactNode> = {
   Cpu: <Cpu className="w-5 h-5 text-blue-400" />,
   Terminal: <Terminal className="w-5 h-5 text-emerald-400" />,
@@ -247,22 +254,35 @@ export default function App() {
             <span className="text-gray-400">—</span>
             <span className="text-gray-300 font-mono">
               Updated: {snapshotMeta.capturedTimestampPST}
-              {sourceStatus && sourceStatus.cacheAgeSeconds > 0
-                ? ` (${sourceStatus.cacheAgeSeconds}s ago)`
+              {sourceStatus
+                ? sourceStatus.cacheAgeSeconds == null
+                  ? " (age unknown)"
+                  : sourceStatus.cacheAgeSeconds > 0
+                    ? ` (${formatCacheAge(sourceStatus.cacheAgeSeconds)} ago)`
+                    : ""
                 : ""}
             </span>
           </div>
 
           <div className="flex flex-wrap items-center gap-3 text-xs font-mono">
             {collectorReachable ? (
-              <div className="flex items-center gap-1.5 text-emerald-400 bg-emerald-950/60 px-2.5 py-1 rounded border border-emerald-800/40">
-                <Wifi className="w-3.5 h-3.5" />
-                <span>
-                  {sourceStatus?.githubReachable
-                    ? "GitHub + Host Live"
-                    : "Host Live · GitHub Cached"}
-                </span>
-              </div>
+              sourceStatus?.githubReachable === true &&
+              sourceStatus.commitSource === "github" &&
+              releaseBaseline.source === "live" ? (
+                <div className="flex items-center gap-1.5 text-emerald-400 bg-emerald-950/60 px-2.5 py-1 rounded border border-emerald-800/40">
+                  <Wifi className="w-3.5 h-3.5" />
+                  <span>GitHub + Host Live</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 text-amber-300 bg-amber-950/60 px-2.5 py-1 rounded border border-amber-800/40">
+                  <Wifi className="w-3.5 h-3.5" />
+                  <span>
+                    {sourceStatus?.githubReachable
+                      ? `Issues Live · Commits ${sourceStatus.commitSource ?? "unknown"}`
+                      : "Host Live · GitHub Cached"}
+                  </span>
+                </div>
+              )
             ) : (
               <div className="flex items-center gap-1.5 text-amber-300 bg-amber-950/60 px-2.5 py-1 rounded border border-amber-800/40">
                 <WifiOff className="w-3.5 h-3.5" />
@@ -422,9 +442,25 @@ export default function App() {
                   </p>
                 </div>
               </div>
-              <span className="text-xs font-mono bg-emerald-950 text-emerald-300 border border-emerald-800 px-2 py-0.5 rounded-full">
-                {mode === "live" ? "Live Sync" : "Verified"}
-              </span>
+              {releaseBaseline.source && releaseBaseline.source !== "live" ? (
+                <span
+                  className="text-xs font-mono bg-amber-950 text-amber-300 border border-amber-800 px-2 py-0.5 rounded-full"
+                  title={sourceStatus?.lastError ?? undefined}
+                >
+                  {releaseBaseline.source}
+                  {sourceStatus
+                    ? sourceStatus.cacheAgeSeconds == null
+                      ? " · age unknown"
+                      : sourceStatus.cacheAgeSeconds > 0
+                        ? ` · ${formatCacheAge(sourceStatus.cacheAgeSeconds)} old`
+                        : ""
+                    : ""}
+                </span>
+              ) : (
+                <span className="text-xs font-mono bg-emerald-950 text-emerald-300 border border-emerald-800 px-2 py-0.5 rounded-full">
+                  {mode === "live" ? "Live Sync" : "Verified"}
+                </span>
+              )}
             </div>
 
             <div className="mt-4 space-y-3">

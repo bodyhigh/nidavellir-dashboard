@@ -83,11 +83,11 @@ export function probeTcpPort(host, port, timeoutMs = 600) {
 }
 
 /**
- * Reads latest commit SHA and subject from a local git repository using execFile (no shell).
+ * Reads latest commit SHA, committer ISO timestamp, and subject from a local git repository using execFile (no shell).
  * Strips sensitive env vars and uses --no-optional-locks for read-only safety.
  * @param {string} repoDir
  * @param {number} timeoutMs
- * @returns {Promise<{ sha: string, message: string } | null>}
+ * @returns {Promise<{ sha: string, committedAt: string | null, message: string } | null>}
  */
 export async function probeLocalGitHead(repoDir, timeoutMs = 1500) {
   if (!repoDir) return null;
@@ -96,7 +96,14 @@ export async function probeLocalGitHead(repoDir, timeoutMs = 1500) {
     if (!stat.isDirectory()) return null;
     const { stdout } = await execFileAsync(
       "git",
-      ["--no-optional-locks", "-C", repoDir, "log", "-1", "--format=%h%x09%s"],
+      [
+        "--no-optional-locks",
+        "-C",
+        repoDir,
+        "log",
+        "-1",
+        "--format=%h%x09%cI%x09%s",
+      ],
       {
         timeout: timeoutMs,
         maxBuffer: 64 * 1024,
@@ -109,11 +116,23 @@ export async function probeLocalGitHead(repoDir, timeoutMs = 1500) {
       },
     );
     const line = stdout.trim();
-    const tabIdx = line.indexOf("\t");
-    if (tabIdx <= 0) return null;
+    const parts = line.split("\t");
+    if (parts.length < 2 || !parts[0].trim()) return null;
+    if (parts.length === 2) {
+      return {
+        sha: parts[0].trim(),
+        committedAt: null,
+        message: parts[1].trim(),
+      };
+    }
+    const committedAtRaw = parts[1].trim();
+    const committedAt = Number.isFinite(Date.parse(committedAtRaw))
+      ? committedAtRaw
+      : null;
     return {
-      sha: line.slice(0, tabIdx).trim(),
-      message: line.slice(tabIdx + 1).trim(),
+      sha: parts[0].trim(),
+      committedAt,
+      message: parts.slice(2).join("\t").trim(),
     };
   } catch {
     return null;
@@ -474,7 +493,7 @@ export async function probeHostInfrastructure(
         value: githubReachable
           ? "Live Upstream + Cache Ready"
           : mode === "cached"
-            ? `Cached Mode (${cacheAgeSeconds}s old)`
+            ? describeCachedAge(cacheAgeSeconds)
             : "Offline Snapshot Ready",
         status: githubReachable ? "optimal" : "healthy",
         detail: githubReachable
@@ -484,6 +503,12 @@ export async function probeHostInfrastructure(
     }
     return metric;
   });
+}
+
+function describeCachedAge(ageSec) {
+  return ageSec === null || ageSec === undefined
+    ? "Cached Mode (age unknown)"
+    : `Cached Mode (${ageSec}s old)`;
 }
 
 function updateDemoResilienceAge(
@@ -500,7 +525,7 @@ function updateDemoResilienceAge(
       value: githubReachable
         ? "Live Upstream + Cache Ready"
         : mode === "cached"
-          ? `Cached Mode (${ageSec}s old)`
+          ? describeCachedAge(ageSec)
           : "Offline Snapshot Ready",
     };
   });
@@ -594,8 +619,23 @@ export function createCollectorManager({
     const uiCommit = ghResult.uiCommit || localUiGit;
     const apiCommit = ghResult.apiCommit || localApiGit;
 
-    // Mode is "live" strictly when upstream GitHub is reachable without error
-    const mode = ghResult.reachable ? "live" : "cached";
+    const uiCarriedOver = !uiCommit;
+    const apiCarriedOver = !apiCommit;
+    const anyCarriedOver = uiCarriedOver || apiCarriedOver;
+
+    const commitSource = anyCarriedOver
+      ? "carried-over"
+      : ghResult.uiCommit && ghResult.apiCommit
+        ? "github"
+        : "local-git";
+    const releaseBaselineSource =
+      commitSource === "github" ? "live" : commitSource;
+
+    // Mode is "live" strictly when upstream GitHub is reachable AND both baseline commits came live from GitHub
+    const mode =
+      ghResult.reachable && releaseBaselineSource === "live"
+        ? "live"
+        : "cached";
 
     const priorCapturedAt =
       priorCache.snapshotMeta?.capturedAt || baseline.snapshotMeta.capturedAt;
@@ -603,31 +643,93 @@ export function createCollectorManager({
       priorCache.snapshotMeta?.capturedTimestampPST ||
       baseline.snapshotMeta.capturedTimestampPST;
 
-    const capturedAt = ghResult.reachable ? now.toISOString() : priorCapturedAt;
-    const capturedTimestampPST = ghResult.reachable
-      ? formatTimestampPST(now)
-      : priorCapturedPST;
-
-    const parsedCaptureMs = Date.parse(capturedAt);
-    const cacheAgeSeconds = ghResult.reachable
-      ? 0
-      : Number.isFinite(parsedCaptureMs)
-        ? Math.max(0, Math.floor((nowMs - parsedCaptureMs) / 1000))
-        : 0;
-
-    const uiCarriedOver = !uiCommit;
-    const apiCarriedOver = !apiCommit;
-    const anyCarriedOver = uiCarriedOver || apiCarriedOver;
-
-    const releaseBaselineSource = anyCarriedOver
-      ? "carried-over"
-      : ghResult.uiCommit && ghResult.apiCommit
-        ? "live"
-        : "local-git";
-
     const carriedSince = anyCarriedOver
       ? priorCache.releaseBaseline?.carriedSince || priorCapturedAt
       : null;
+    // The carried-over component's provenance timestamp is itself a required
+    // freshness input: it must be finite and not in the future. A future or
+    // invalid carriedSince makes the whole baseline age unknown even when an
+    // older, valid local sibling exists - selecting the sibling must never
+    // hide an invalid required component.
+    const carriedSinceMs = carriedSince ? Date.parse(carriedSince) : Number.NaN;
+
+    // Freshness is only known when EVERY component that came from the local
+    // fallback carries a valid, non-future commit timestamp. A single missing,
+    // invalid or clock-skewed local component makes the combined baseline age
+    // unknown - we must never infer it from the other component alone. A
+    // component with neither a live GitHub commit nor a local git record is
+    // CARRIED OVER, not local: it is bounded by carriedSince below and is not
+    // required to supply a local timestamp here.
+    const localFallbackTimestamps = [];
+    let localFallbackComplete = true;
+    const requireLocalTimestamp = (ts) => {
+      if (typeof ts !== "string") {
+        localFallbackComplete = false;
+        return;
+      }
+      const tsMs = Date.parse(ts);
+      if (!Number.isFinite(tsMs) || tsMs > nowMs) {
+        localFallbackComplete = false;
+        return;
+      }
+      localFallbackTimestamps.push(ts);
+    };
+    if (!ghResult.uiCommit && localUiGit) {
+      requireLocalTimestamp(localUiGit?.committedAt);
+    }
+    if (!ghResult.apiCommit && localApiGit) {
+      requireLocalTimestamp(localApiGit?.committedAt);
+    }
+    localFallbackTimestamps.sort((a, b) => Date.parse(a) - Date.parse(b));
+
+    let capturedAt = priorCapturedAt;
+    let capturedTimestampPST = priorCapturedPST;
+    let freshnessKnown = false;
+    if (mode === "live") {
+      capturedAt = now.toISOString();
+      capturedTimestampPST = formatTimestampPST(now);
+      freshnessKnown = true;
+    } else if (
+      releaseBaselineSource === "local-git" &&
+      localFallbackComplete &&
+      localFallbackTimestamps.length > 0
+    ) {
+      capturedAt = localFallbackTimestamps[0];
+      capturedTimestampPST = formatTimestampPST(new Date(capturedAt));
+      freshnessKnown = true;
+    } else if (
+      releaseBaselineSource === "carried-over" &&
+      localFallbackComplete &&
+      carriedSince &&
+      Number.isFinite(carriedSinceMs) &&
+      carriedSinceMs <= nowMs
+    ) {
+      // Oldest qualifying component wins. The carried-over component's
+      // provenance timestamp is carriedSince; any local-fallback component
+      // contributes its own (already validated) commit time. Reporting
+      // carriedSince alone would understate the age of an older local sibling.
+      const qualifying = [carriedSince, ...localFallbackTimestamps]
+        .filter((ts) => Number.isFinite(Date.parse(ts)))
+        .sort((a, b) => Date.parse(a) - Date.parse(b));
+      capturedAt = qualifying[0] ?? carriedSince;
+      capturedTimestampPST = formatTimestampPST(new Date(capturedAt));
+      freshnessKnown = true;
+    }
+
+    const parsedCaptureMs = Date.parse(capturedAt);
+    // Freshness is only known when provenance is positive AND the timestamp is
+    // finite and not in the future. Unknown, invalid or skewed freshness must
+    // report null (rendered as "age unknown"), never 0 - a fabricated claim
+    // that the baseline was just captured. We also never borrow an unrelated
+    // prior-cache capture time as a local-git commit age.
+    const cacheAgeSeconds =
+      mode === "live"
+        ? 0
+        : freshnessKnown &&
+            Number.isFinite(parsedCaptureMs) &&
+            parsedCaptureMs <= nowMs
+          ? Math.max(0, Math.floor((nowMs - parsedCaptureMs) / 1000))
+          : null;
 
     const releaseBaseline = {
       ...priorCache.releaseBaseline,
@@ -671,11 +773,12 @@ export function createCollectorManager({
         mode,
         capturedAt,
         capturedTimestampPST,
-        buildVersion: `1.1.0-live.${releaseBaseline.latestCommitSha}`,
+        buildVersion: `1.1.0-${mode === "live" ? "live" : releaseBaselineSource}.${releaseBaseline.latestCommitSha}`,
         isolationTier: "hybrid-lan-telemetry",
       },
       sourceStatus: {
         githubReachable: Boolean(ghResult.reachable),
+        commitSource,
         hostProbesActive: Boolean(agentProbeResult.hostProbesActive),
         cacheAgeSeconds,
         lastError: ghResult.error || carryOverError || null,
@@ -706,10 +809,23 @@ export function createCollectorManager({
       memoryCache && ageSinceCollectMs < minRefreshCooldownMs;
 
     if (memoryCache && ((!forceRefresh && withinTtl) || withinCooldown)) {
+      const cachedMode = memoryCache.snapshotMeta?.mode;
       const capturedMs = Date.parse(memoryCache.snapshotMeta?.capturedAt ?? "");
-      const cacheAgeSeconds = Number.isFinite(capturedMs)
-        ? Math.max(0, Math.floor((nowMs - capturedMs) / 1000))
-        : Math.max(0, Math.floor(ageSinceCollectMs / 1000));
+      const priorAge = memoryCache.sourceStatus?.cacheAgeSeconds;
+      // Same honesty rule as collectFresh: only recompute a real age, otherwise
+      // preserve the already-unknown (null) freshness rather than fabricate 0
+      // from time-since-last-collect. An explicit null priorAge means the
+      // provenance was never established (e.g. local-git commit without
+      // committedAt), so a retained capturedAt belongs to an unrelated prior
+      // cache and must not be parsed into a known age.
+      const cacheAgeSeconds =
+        cachedMode === "live"
+          ? 0
+          : priorAge === null
+            ? null
+            : Number.isFinite(capturedMs) && capturedMs <= nowMs
+              ? Math.max(0, Math.floor((nowMs - capturedMs) / 1000))
+              : (priorAge ?? null);
       return {
         ...memoryCache,
         sourceStatus: {
