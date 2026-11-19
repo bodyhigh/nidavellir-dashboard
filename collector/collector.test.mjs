@@ -648,3 +648,138 @@ test("createCollectorManager stays cached when the issues request fails while bo
 
   await fs.rm(tmpDir, { recursive: true, force: true });
 });
+
+test("createCollectorManager keeps carried-over freshness unknown when a local component timestamp is missing or future", async () => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "nid-carry-mixed-age-"));
+  const recentIso = new Date().toISOString();
+  const futureIso = "2099-01-01T00:00:00Z";
+
+  async function runCarryMixed(name, localUi, localApi) {
+    const cacheFile = path.join(tmpDir, `${name}.json`);
+    const priorCapturedAt = new Date(Date.now() - 3_600 * 1000).toISOString();
+    await fs.writeFile(
+      cacheFile,
+      JSON.stringify({
+        snapshotMeta: {
+          mode: "cached",
+          capturedAt: priorCapturedAt,
+          capturedTimestampPST: "prior",
+        },
+        releaseBaseline: { latestCommitSha: "prior1", apiCommitSha: "prior2" },
+        stories: [],
+      }),
+    );
+    const manager = createCollectorManager({
+      cacheFilePath: cacheFile,
+      ttlMs: 60_000,
+      minRefreshCooldownMs: 0,
+      uiRepoDir: "/fake/ui",
+      apiRepoDir: "/fake/api",
+      probeGitHubImpl: async () => ({
+        reachable: false,
+        partial: true,
+        uiCommit: null,
+        apiCommit: null,
+        rawIssues: null,
+        error: "GitHub HTTP 500 for /issues",
+      }),
+      probeGitImpl: async (dir) => (dir.includes("ui") ? localUi : localApi),
+    });
+    const first = await manager.getDashboardData({ forceRefresh: true });
+    const cached = await manager.getDashboardData();
+    return { first, cached };
+  }
+
+  // A) UI carried over, API from local git with a MISSING committedAt: the
+  // combined baseline age is unknown, not the carriedSince lower bound.
+  const uiCarryApiMissing = await runCarryMixed(
+    "ui-carry-api-missing",
+    null,
+    { sha: "api1", message: "no timestamp" },
+  );
+  assert.equal(uiCarryApiMissing.first.releaseBaseline.source, "carried-over");
+  assert.equal(
+    uiCarryApiMissing.first.sourceStatus.cacheAgeSeconds,
+    null,
+    "a local API commit without committedAt must make carried-over age unknown",
+  );
+  assert.equal(
+    uiCarryApiMissing.cached.sourceStatus.cacheAgeSeconds,
+    null,
+    "a cached read must preserve the unknown carried-over age",
+  );
+
+  // B) UI carried over, API from local git with a FUTURE committedAt (clock skew).
+  const uiCarryApiFuture = await runCarryMixed(
+    "ui-carry-api-future",
+    null,
+    { sha: "api1", message: "future", committedAt: futureIso },
+  );
+  assert.equal(
+    uiCarryApiFuture.first.sourceStatus.cacheAgeSeconds,
+    null,
+    "a future local API timestamp must make carried-over age unknown",
+  );
+  assert.equal(uiCarryApiFuture.cached.sourceStatus.cacheAgeSeconds, null);
+
+  // C) API carried over, UI from local git with a MISSING committedAt.
+  const apiCarryUiMissing = await runCarryMixed(
+    "api-carry-ui-missing",
+    { sha: "ui1", message: "no timestamp" },
+    null,
+  );
+  assert.equal(apiCarryUiMissing.first.releaseBaseline.source, "carried-over");
+  assert.equal(
+    apiCarryUiMissing.first.sourceStatus.cacheAgeSeconds,
+    null,
+    "a local UI commit without committedAt must make carried-over age unknown",
+  );
+  assert.equal(apiCarryUiMissing.cached.sourceStatus.cacheAgeSeconds, null);
+
+  // D) API carried over, UI from local git with a FUTURE committedAt.
+  const apiCarryUiFuture = await runCarryMixed(
+    "api-carry-ui-future",
+    { sha: "ui1", message: "future", committedAt: futureIso },
+    null,
+  );
+  assert.equal(
+    apiCarryUiFuture.first.sourceStatus.cacheAgeSeconds,
+    null,
+    "a future local UI timestamp must make carried-over age unknown",
+  );
+  assert.equal(apiCarryUiFuture.cached.sourceStatus.cacheAgeSeconds, null);
+
+  // Control: a valid local component still yields a known carried-over age.
+  const carryWithValidLocal = await runCarryMixed(
+    "carry-with-valid-local",
+    null,
+    { sha: "api1", message: "valid", committedAt: recentIso },
+  );
+  assert.equal(carryWithValidLocal.first.releaseBaseline.source, "carried-over");
+  assert.ok(
+    Number.isFinite(carryWithValidLocal.first.sourceStatus.cacheAgeSeconds),
+    "a valid local component must not suppress the carried-over age",
+  );
+
+  // Positive case: when the local sibling is OLDER than carriedSince, the
+  // combined age must be the OLDEST qualifying component, not carriedSince.
+  const fiveDaysAgoIso = new Date(
+    Date.now() - 5 * 86_400 * 1000,
+  ).toISOString();
+  const carryWithOldLocal = await runCarryMixed(
+    "carry-with-old-local",
+    null,
+    { sha: "api1", message: "old", committedAt: fiveDaysAgoIso },
+  );
+  assert.equal(carryWithOldLocal.first.releaseBaseline.source, "carried-over");
+  assert.ok(
+    carryWithOldLocal.first.sourceStatus.cacheAgeSeconds >= 5 * 86_400 - 10,
+    `expected the oldest qualifying component age (~5d), got ${carryWithOldLocal.first.sourceStatus.cacheAgeSeconds}`,
+  );
+  assert.ok(
+    carryWithOldLocal.cached.sourceStatus.cacheAgeSeconds >= 5 * 86_400 - 10,
+    "cached read must preserve the oldest qualifying component age",
+  );
+
+  await fs.rm(tmpDir, { recursive: true, force: true });
+});

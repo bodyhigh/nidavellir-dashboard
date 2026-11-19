@@ -649,8 +649,11 @@ export function createCollectorManager({
 
     // Freshness is only known when EVERY component that came from the local
     // fallback carries a valid, non-future commit timestamp. A single missing,
-    // invalid or clock-skewed component makes the combined baseline age
-    // unknown - we must never infer it from the other component alone.
+    // invalid or clock-skewed local component makes the combined baseline age
+    // unknown - we must never infer it from the other component alone. A
+    // component with neither a live GitHub commit nor a local git record is
+    // CARRIED OVER, not local: it is bounded by carriedSince below and is not
+    // required to supply a local timestamp here.
     const localFallbackTimestamps = [];
     let localFallbackComplete = true;
     const requireLocalTimestamp = (ts) => {
@@ -665,8 +668,12 @@ export function createCollectorManager({
       }
       localFallbackTimestamps.push(ts);
     };
-    if (!ghResult.uiCommit) requireLocalTimestamp(localUiGit?.committedAt);
-    if (!ghResult.apiCommit) requireLocalTimestamp(localApiGit?.committedAt);
+    if (!ghResult.uiCommit && localUiGit) {
+      requireLocalTimestamp(localUiGit?.committedAt);
+    }
+    if (!ghResult.apiCommit && localApiGit) {
+      requireLocalTimestamp(localApiGit?.committedAt);
+    }
     localFallbackTimestamps.sort((a, b) => Date.parse(a) - Date.parse(b));
 
     let capturedAt = priorCapturedAt;
@@ -686,10 +693,18 @@ export function createCollectorManager({
       freshnessKnown = true;
     } else if (
       releaseBaselineSource === "carried-over" &&
+      localFallbackComplete &&
       carriedSince &&
       Number.isFinite(Date.parse(carriedSince))
     ) {
-      capturedAt = carriedSince;
+      // Oldest qualifying component wins. The carried-over component's
+      // provenance timestamp is carriedSince; any local-fallback component
+      // contributes its own (already validated) commit time. Reporting
+      // carriedSince alone would understate the age of an older local sibling.
+      const qualifying = [carriedSince, ...localFallbackTimestamps]
+        .filter((ts) => Number.isFinite(Date.parse(ts)))
+        .sort((a, b) => Date.parse(a) - Date.parse(b));
+      capturedAt = qualifying[0] ?? carriedSince;
       capturedTimestampPST = formatTimestampPST(new Date(capturedAt));
       freshnessKnown = true;
     }
