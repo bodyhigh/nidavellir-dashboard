@@ -646,13 +646,41 @@ export function createCollectorManager({
     const carriedSince = anyCarriedOver
       ? priorCache.releaseBaseline?.carriedSince || priorCapturedAt
       : null;
+    // The carried-over component's provenance timestamp is itself a required
+    // freshness input: it must be finite and not in the future. A future or
+    // invalid carriedSince makes the whole baseline age unknown even when an
+    // older, valid local sibling exists - selecting the sibling must never
+    // hide an invalid required component.
+    const carriedSinceMs = carriedSince ? Date.parse(carriedSince) : Number.NaN;
 
-    const localFallbackTimestamps = [
-      !ghResult.uiCommit ? localUiGit?.committedAt : null,
-      !ghResult.apiCommit ? localApiGit?.committedAt : null,
-    ]
-      .filter((ts) => typeof ts === "string" && Number.isFinite(Date.parse(ts)))
-      .sort((a, b) => Date.parse(a) - Date.parse(b));
+    // Freshness is only known when EVERY component that came from the local
+    // fallback carries a valid, non-future commit timestamp. A single missing,
+    // invalid or clock-skewed local component makes the combined baseline age
+    // unknown - we must never infer it from the other component alone. A
+    // component with neither a live GitHub commit nor a local git record is
+    // CARRIED OVER, not local: it is bounded by carriedSince below and is not
+    // required to supply a local timestamp here.
+    const localFallbackTimestamps = [];
+    let localFallbackComplete = true;
+    const requireLocalTimestamp = (ts) => {
+      if (typeof ts !== "string") {
+        localFallbackComplete = false;
+        return;
+      }
+      const tsMs = Date.parse(ts);
+      if (!Number.isFinite(tsMs) || tsMs > nowMs) {
+        localFallbackComplete = false;
+        return;
+      }
+      localFallbackTimestamps.push(ts);
+    };
+    if (!ghResult.uiCommit && localUiGit) {
+      requireLocalTimestamp(localUiGit?.committedAt);
+    }
+    if (!ghResult.apiCommit && localApiGit) {
+      requireLocalTimestamp(localApiGit?.committedAt);
+    }
+    localFallbackTimestamps.sort((a, b) => Date.parse(a) - Date.parse(b));
 
     let capturedAt = priorCapturedAt;
     let capturedTimestampPST = priorCapturedPST;
@@ -663,6 +691,7 @@ export function createCollectorManager({
       freshnessKnown = true;
     } else if (
       releaseBaselineSource === "local-git" &&
+      localFallbackComplete &&
       localFallbackTimestamps.length > 0
     ) {
       capturedAt = localFallbackTimestamps[0];
@@ -670,10 +699,19 @@ export function createCollectorManager({
       freshnessKnown = true;
     } else if (
       releaseBaselineSource === "carried-over" &&
+      localFallbackComplete &&
       carriedSince &&
-      Number.isFinite(Date.parse(carriedSince))
+      Number.isFinite(carriedSinceMs) &&
+      carriedSinceMs <= nowMs
     ) {
-      capturedAt = carriedSince;
+      // Oldest qualifying component wins. The carried-over component's
+      // provenance timestamp is carriedSince; any local-fallback component
+      // contributes its own (already validated) commit time. Reporting
+      // carriedSince alone would understate the age of an older local sibling.
+      const qualifying = [carriedSince, ...localFallbackTimestamps]
+        .filter((ts) => Number.isFinite(Date.parse(ts)))
+        .sort((a, b) => Date.parse(a) - Date.parse(b));
+      capturedAt = qualifying[0] ?? carriedSince;
       capturedTimestampPST = formatTimestampPST(new Date(capturedAt));
       freshnessKnown = true;
     }
