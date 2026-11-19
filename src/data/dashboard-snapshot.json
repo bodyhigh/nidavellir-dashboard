@@ -1,8 +1,8 @@
 {
   "snapshotMeta": {
     "mode": "offline_snapshot",
-    "capturedAt": "2026-11-17T20:22:46-08:00",
-    "capturedTimestampPST": "2026-11-17 20:22 PST",
+    "capturedAt": "2026-11-18T21:02:04-08:00",
+    "capturedTimestampPST": "2026-11-18 21:02 PST",
     "nodeEnv": "production",
     "buildVersion": "1.1.0-live.3769a1a",
     "isolationTier": "hybrid-lan-telemetry"
@@ -17,10 +17,10 @@
     "uiRepo": "bodyhigh/manifesting-ui",
     "apiRepo": "bodyhigh/manifesting-api",
     "integrationBranch": "origin/main",
-    "latestCommitSha": "fac007e",
-    "latestCommitMessage": "fix(release): make the UI acceptance gate satisfiable (read the run name, not .inputs) (#302)",
-    "apiCommitSha": "84f4d35",
-    "apiCommitMessage": "docs(release): read the Production scope back after deleting the promotion token (#246)",
+    "latestCommitSha": "ab2ffa2",
+    "latestCommitMessage": "fix(capture): focus skipped card after commit and dialog release (#306)",
+    "apiCommitSha": "29d5e37",
+    "apiCommitMessage": "chore(deps): bump the production-dependencies group with 6 updates (#242)",
     "testSuite": {
       "framework": "Vitest 3.x / Node v22.23.4",
       "total": 1833,
@@ -63,10 +63,10 @@
         "duration": "1.7s"
       }
     ],
-    "baselineReadAt": "2026-11-18T04:22:46Z",
+    "baselineReadAt": "2026-11-19T05:02:04Z",
     "liveDeployments": {
-      "readAt": "2026-11-18T04:22:46Z",
-      "note": "deployed revisions read from live health endpoints; may lag origin/main",
+      "readAt": "2026-11-19T05:02:04Z",
+      "note": "deployed revisions read from live health endpoints; may lag origin/main (measured 2026-11-19: UI served sha is an ancestor of main, 17 commits behind)",
       "ui": {
         "url": "https://manifesting.art/api/health/live",
         "servedSha": "55a150e4c5682dfcf816ac142584b056a851c12a",
