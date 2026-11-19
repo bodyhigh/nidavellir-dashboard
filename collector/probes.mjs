@@ -646,6 +646,12 @@ export function createCollectorManager({
     const carriedSince = anyCarriedOver
       ? priorCache.releaseBaseline?.carriedSince || priorCapturedAt
       : null;
+    // The carried-over component's provenance timestamp is itself a required
+    // freshness input: it must be finite and not in the future. A future or
+    // invalid carriedSince makes the whole baseline age unknown even when an
+    // older, valid local sibling exists - selecting the sibling must never
+    // hide an invalid required component.
+    const carriedSinceMs = carriedSince ? Date.parse(carriedSince) : Number.NaN;
 
     // Freshness is only known when EVERY component that came from the local
     // fallback carries a valid, non-future commit timestamp. A single missing,
@@ -695,7 +701,8 @@ export function createCollectorManager({
       releaseBaselineSource === "carried-over" &&
       localFallbackComplete &&
       carriedSince &&
-      Number.isFinite(Date.parse(carriedSince))
+      Number.isFinite(carriedSinceMs) &&
+      carriedSinceMs <= nowMs
     ) {
       // Oldest qualifying component wins. The carried-over component's
       // provenance timestamp is carriedSince; any local-fallback component
