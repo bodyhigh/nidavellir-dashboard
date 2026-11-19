@@ -332,3 +332,56 @@ test("createCollectorServer normalizes paths, enforces URL length limit, sets CS
     await new Promise((resolve) => server.close(resolve));
   }
 });
+
+
+test("createCollectorManager surfaces carried-over releaseBaseline source, carriedSince, and lastError when live commits are unavailable", async () => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "nid-carryover-test-"));
+  const cacheFile = path.join(tmpDir, "cache.json");
+
+  const priorCapturedAt = "2026-11-15T05:00:00.000Z";
+  await fs.writeFile(
+    cacheFile,
+    JSON.stringify({
+      snapshotMeta: {
+        mode: "live",
+        capturedAt: priorCapturedAt,
+        capturedTimestampPST: "2026-11-14 21:00:00 PST",
+      },
+      releaseBaseline: {
+        latestCommitSha: "old1111",
+        latestCommitMessage: "chore: prior ui",
+        apiCommitSha: "old2222",
+        apiCommitMessage: "chore: prior api",
+      },
+      stories: [],
+    }),
+  );
+
+  const manager = createCollectorManager({
+    cacheFilePath: cacheFile,
+    ttlMs: 60_000,
+    minRefreshCooldownMs: 0,
+    uiRepoDir: "/nonexistent/ui",
+    apiRepoDir: "/nonexistent/api",
+    probeGitHubImpl: async () => ({
+      reachable: true,
+      partial: true,
+      uiCommit: null,
+      apiCommit: null,
+      rawIssues: [],
+      error: null,
+    }),
+    probeGitImpl: async () => null,
+  });
+
+  const data = await manager.getDashboardData({ forceRefresh: true });
+  assert.equal(data.releaseBaseline.latestCommitSha, "old1111");
+  assert.equal(data.releaseBaseline.apiCommitSha, "old2222");
+  assert.equal(data.releaseBaseline.source, "carried-over");
+  assert.equal(data.releaseBaseline.carriedSince, priorCapturedAt);
+  assert.ok(
+    typeof data.sourceStatus.lastError === "string" &&
+      data.sourceStatus.lastError.length > 0,
+    "expected descriptive lastError when releaseBaseline commits are carried over",
+  );
+});
