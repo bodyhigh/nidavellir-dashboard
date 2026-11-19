@@ -647,12 +647,27 @@ export function createCollectorManager({
       ? priorCache.releaseBaseline?.carriedSince || priorCapturedAt
       : null;
 
-    const localFallbackTimestamps = [
-      !ghResult.uiCommit ? localUiGit?.committedAt : null,
-      !ghResult.apiCommit ? localApiGit?.committedAt : null,
-    ]
-      .filter((ts) => typeof ts === "string" && Number.isFinite(Date.parse(ts)))
-      .sort((a, b) => Date.parse(a) - Date.parse(b));
+    // Freshness is only known when EVERY component that came from the local
+    // fallback carries a valid, non-future commit timestamp. A single missing,
+    // invalid or clock-skewed component makes the combined baseline age
+    // unknown - we must never infer it from the other component alone.
+    const localFallbackTimestamps = [];
+    let localFallbackComplete = true;
+    const requireLocalTimestamp = (ts) => {
+      if (typeof ts !== "string") {
+        localFallbackComplete = false;
+        return;
+      }
+      const tsMs = Date.parse(ts);
+      if (!Number.isFinite(tsMs) || tsMs > nowMs) {
+        localFallbackComplete = false;
+        return;
+      }
+      localFallbackTimestamps.push(ts);
+    };
+    if (!ghResult.uiCommit) requireLocalTimestamp(localUiGit?.committedAt);
+    if (!ghResult.apiCommit) requireLocalTimestamp(localApiGit?.committedAt);
+    localFallbackTimestamps.sort((a, b) => Date.parse(a) - Date.parse(b));
 
     let capturedAt = priorCapturedAt;
     let capturedTimestampPST = priorCapturedPST;
@@ -663,6 +678,7 @@ export function createCollectorManager({
       freshnessKnown = true;
     } else if (
       releaseBaselineSource === "local-git" &&
+      localFallbackComplete &&
       localFallbackTimestamps.length > 0
     ) {
       capturedAt = localFallbackTimestamps[0];

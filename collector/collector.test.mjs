@@ -540,3 +540,111 @@ test("createCollectorManager reports unknown freshness as null (not 0) for inval
 
   await fs.rm(tmpDir, { recursive: true, force: true });
 });
+
+test("createCollectorManager keeps combined local-git freshness unknown when only one component has a timestamp", async () => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "nid-asym-age-"));
+  const recentIso = new Date().toISOString();
+  const fiveDaysAgoIso = new Date(
+    Date.now() - 5 * 86_400 * 1000,
+  ).toISOString();
+
+  async function runAsym(name, localUi, localApi) {
+    const manager = createCollectorManager({
+      cacheFilePath: path.join(tmpDir, `${name}.json`),
+      ttlMs: 60_000,
+      minRefreshCooldownMs: 0,
+      uiRepoDir: "/fake/ui",
+      apiRepoDir: "/fake/api",
+      probeGitHubImpl: async () => ({
+        reachable: false,
+        partial: true,
+        uiCommit: null,
+        apiCommit: null,
+        rawIssues: null,
+        error: "GitHub HTTP 500 for /issues",
+      }),
+      probeGitImpl: async (dir) => (dir.includes("ui") ? localUi : localApi),
+    });
+    return manager.getDashboardData({ forceRefresh: true });
+  }
+
+  // UI commit age unknown, API recent: a single known component must NOT be
+  // promoted to a known combined baseline age.
+  const mixedMissing = await runAsym(
+    "mixed-missing",
+    { sha: "old-ui", message: "unknown time" },
+    { sha: "recent-api", message: "recent", committedAt: recentIso },
+  );
+  assert.equal(mixedMissing.sourceStatus.commitSource, "local-git");
+  assert.equal(
+    mixedMissing.sourceStatus.cacheAgeSeconds,
+    null,
+    "a missing UI component timestamp must make the combined age unknown, not 0",
+  );
+
+  // UI commit timestamp in the future (clock skew), API valid: still unknown.
+  const mixedFuture = await runAsym(
+    "mixed-future",
+    { sha: "future-ui", message: "future", committedAt: "2099-01-01T00:00:00Z" },
+    { sha: "recent-api", message: "recent", committedAt: recentIso },
+  );
+  assert.equal(mixedFuture.sourceStatus.commitSource, "local-git");
+  assert.equal(
+    mixedFuture.sourceStatus.cacheAgeSeconds,
+    null,
+    "a future UI component timestamp must make the combined age unknown, not 0",
+  );
+
+  // Both components valid: the OLDEST component drives the combined age.
+  const bothValid = await runAsym(
+    "both-valid",
+    { sha: "old-ui", message: "old", committedAt: fiveDaysAgoIso },
+    { sha: "recent-api", message: "recent", committedAt: recentIso },
+  );
+  assert.equal(bothValid.sourceStatus.commitSource, "local-git");
+  assert.ok(
+    bothValid.sourceStatus.cacheAgeSeconds >= 5 * 86_400 - 10,
+    `expected the oldest component age, got ${bothValid.sourceStatus.cacheAgeSeconds}`,
+  );
+
+  await fs.rm(tmpDir, { recursive: true, force: true });
+});
+
+test("createCollectorManager stays cached when the issues request fails while both commit records are available", async () => {
+  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "nid-reachability-"));
+  const staleIso = new Date(Date.now() - 5 * 86_400 * 1000).toISOString();
+
+  const manager = createCollectorManager({
+    cacheFilePath: path.join(tmpDir, "cache.json"),
+    ttlMs: 60_000,
+    minRefreshCooldownMs: 0,
+    uiRepoDir: "/fake/ui",
+    apiRepoDir: "/fake/api",
+    // Commits resolved but the issues endpoint failed -> reachable=false with
+    // both commit records present. Removing the reachability term from the mode
+    // predicate must break this assertion.
+    probeGitHubImpl: async () => ({
+      reachable: false,
+      partial: true,
+      uiCommit: { sha: "aaaaaaa", message: "ui live" },
+      apiCommit: { sha: "bbbbbbb", message: "api live" },
+      rawIssues: null,
+      error: "GitHub HTTP 500 for /issues",
+    }),
+    probeGitImpl: async () => ({
+      sha: "deadbee",
+      message: "stale local",
+      committedAt: staleIso,
+    }),
+  });
+
+  const data = await manager.getDashboardData({ forceRefresh: true });
+  assert.equal(
+    data.snapshotMeta.mode,
+    "cached",
+    "an unreachable GitHub upstream must not be reported live even with commit records present",
+  );
+  assert.equal(data.sourceStatus.githubReachable, false);
+
+  await fs.rm(tmpDir, { recursive: true, force: true });
+});
